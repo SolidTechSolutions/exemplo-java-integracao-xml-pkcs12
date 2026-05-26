@@ -77,10 +77,10 @@ public class XmlPkcs12Service {
     @Value("${solidsign.sig.hashAlgorithm}")
     private String hashAlgorithm;
 
-    // [EN]    Policy version (e.g. 1_3)
-    // [PT-BR] Versão da política (ex: 1_3)
-    // [ES]    Versión de la política (p.ej. 1_3)
-    @Value("${solidsign.sig.policyVersion}")
+    // [EN]    Optional: policy version — leave blank to use the API default
+    // [PT-BR] Opcional: versão da política — deixe em branco para usar o padrão da API
+    // [ES]    Opcional: versión de la política — déjelo en blanco para usar el valor por defecto de la API
+    @Value("${solidsign.sig.policyVersion:}")
     private String policyVersion;
 
     // [EN]    Signature packaging (ENVELOPED, ENVELOPING, DETACHED)
@@ -101,11 +101,35 @@ public class XmlPkcs12Service {
     @Value("${solidsign.sig.signatureNodeNamespace}")
     private String signatureNodeNamespace;
 
-    // [EN]    XML canonicalization algorithm URI
-    // [PT-BR] URI do algoritmo de canonicalização XML
-    // [ES]    URI del algoritmo de canonicalización XML
+    // [EN]    Canonicalization algorithm name (INCLUSIVE, EXCLUSIVE, INCLUSIVE_WITH_COMMENTS, EXCLUSIVE_WITH_COMMENTS)
+    // [PT-BR] Nome do algoritmo de canonicalização (INCLUSIVE, EXCLUSIVE, INCLUSIVE_WITH_COMMENTS, EXCLUSIVE_WITH_COMMENTS)
+    // [ES]    Nombre del algoritmo de canonicalización (INCLUSIVE, EXCLUSIVE, INCLUSIVE_WITH_COMMENTS, EXCLUSIVE_WITH_COMMENTS)
     @Value("${solidsign.sig.canonicalizationMethod}")
     private String canonicalizationMethod;
+
+    // [EN]    Remove XPath exclusion filter from the signed document (false recommended for standard use)
+    // [PT-BR] Remover filtro de exclusão XPath do documento assinado (false recomendado para uso padrão)
+    // [ES]    Eliminar filtro de exclusión XPath del documento firmado (false recomendado para uso estándar)
+    @Value("${solidsign.sig.isRemoveXPathExclusionFilter}")
+    private String isRemoveXPathExclusionFilter;
+
+    // [EN]    Remove namespace prefix from node names before signing (false recommended for standard use)
+    // [PT-BR] Remover prefixo de namespace dos nomes de nó antes de assinar (false recomendado para uso padrão)
+    // [ES]    Eliminar prefijo de namespace de los nombres de nodo antes de firmar (false recomendado para uso estándar)
+    @Value("${solidsign.sig.isRemoveNamespacePrefixFromNodeNames}")
+    private String isRemoveNamespacePrefixFromNodeNames;
+
+    // [EN]    Include KeyInfo element in the signature (false recommended for standard use)
+    // [PT-BR] Incluir elemento KeyInfo na assinatura (false recomendado para uso padrão)
+    // [ES]    Incluir elemento KeyInfo en la firma (false recomendado para uso estándar)
+    @Value("${solidsign.sig.isSignKeyInfo}")
+    private String isSignKeyInfo;
+
+    // [EN]    Optional: ID of the specific XML node to sign (leave blank to sign by name/namespace only)
+    // [PT-BR] Opcional: ID do nó XML específico a assinar (deixe em branco para assinar apenas por nome/namespace)
+    // [ES]    Opcional: ID del nodo XML específico a firmar (deje en blanco para firmar solo por nombre/namespace)
+    // @Value("${solidsign.sig.signatureNodeId:}")
+    // private String signatureNodeId;
 
     /**
      * [EN]    Signs the given XML files via XAdES using the UUID of the pre-imported certificate.
@@ -160,18 +184,26 @@ public class XmlPkcs12Service {
         // [ES]    Parámetros de firma
         body.add("profile",                profile);
         body.add("hashAlgorithm",          hashAlgorithm);
-        body.add("policyVersion",          policyVersion);
+        // [EN]    Only send policyVersion if explicitly configured (optional parameter)
+        // [PT-BR] Enviar policyVersion apenas se configurado explicitamente (parâmetro opcional)
+        // [ES]    Enviar policyVersion solo si está configurado explícitamente (parámetro opcional)
+        if (policyVersion != null && !policyVersion.isBlank()) body.add("policyVersion", policyVersion);
         body.add("signaturePackaging",     signaturePackaging);
         body.add("signatureNodeName",      signatureNodeName);
         body.add("signatureNodeNamespace", signatureNodeNamespace);
         body.add("canonicalizationMethod", canonicalizationMethod);
 
-        // [EN]    XPath and namespace prefix options — set to false for standard usage
-        // [PT-BR] Opções de XPath e prefixo de namespace — defina como false para uso padrão
-        // [ES]    Opciones de XPath y prefijo de namespace — configurar en false para uso estándar
-        body.add("isRemoveXPathExclusionFilter",        "false");
-        body.add("isRemoveNamespacePrefixFromNodeNames", "false");
-        body.add("isSignKeyInfo",                        "false");
+        // [EN]    Optional: per-document node ID (uncomment if targeting a specific node by ID)
+        // [PT-BR] Opcional: ID do nó por documento (descomente se for assinar um nó específico por ID)
+        // [ES]    Opcional: ID del nodo por documento (descomente para firmar un nodo específico por ID)
+        // body.add("signatureNodeId", signatureNodeId);
+
+        // [EN]    XPath filter and namespace prefix options
+        // [PT-BR] Opções de filtro XPath e prefixo de namespace
+        // [ES]    Opciones de filtro XPath y prefijo de namespace
+        body.add("isRemoveXPathExclusionFilter",        isRemoveXPathExclusionFilter);
+        body.add("isRemoveNamespacePrefixFromNodeNames", isRemoveNamespacePrefixFromNodeNames);
+        body.add("isSignKeyInfo",                        isSignKeyInfo);
 
         try {
             ResponseEntity<SignResponse> resp = restTemplate.postForEntity(
@@ -222,5 +254,76 @@ public class XmlPkcs12Service {
             }
         }
         return baos.toByteArray();
+    }
+
+    // ─── Form endpoint (all params from request, properties ignored) ──────────
+
+    /**
+     * [EN]    Signs XML documents via XAdES PKCS#12 with all parameters supplied by the caller.
+     * [PT-BR] Assina documentos XML via XAdES PKCS#12 com todos os parâmetros fornecidos pelo chamador.
+     * [ES]    Firma documentos XML vía XAdES PKCS#12 con todos los parámetros suministrados por el llamador.
+     *
+     * @return ZIP bytes with signed documents, or null on error
+     */
+    public byte[] signPkcs12Form(String auth, String apiBaseUrl, String certId,
+                                  String profile, String hashAlgorithm,
+                                  String signaturePackaging, String policyVersion,
+                                  String canonicalizationMethod,
+                                  String signatureNodeName, String signatureNodeNamespace,
+                                  String isRemoveXPathExclusionFilter,
+                                  String isRemoveNamespacePrefixFromNodeNames,
+                                  String isSignKeyInfo, String signatureNodeId,
+                                  List<File> files) throws IOException {
+        LOGGER.info("XAdES PKCS12 form signing for {} file(s).", files.size());
+        String signUrl = apiBaseUrl + "/solidsign/dsig/xml/sign-pkcs12";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.set("Authorization", auth);
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        for (int i = 0; i < files.size(); i++) body.add("document[" + i + "]", new FileSystemResource(files.get(i)));
+        body.add("pfxCode", certId);
+        if (profile != null && !profile.isBlank())                       body.add("profile",            profile);
+        if (hashAlgorithm != null && !hashAlgorithm.isBlank())           body.add("hashAlgorithm",      hashAlgorithm);
+        if (policyVersion != null && !policyVersion.isBlank())           body.add("policyVersion",      policyVersion);
+        if (signaturePackaging != null && !signaturePackaging.isBlank()) body.add("signaturePackaging", signaturePackaging);
+        if (signatureNodeName != null && !signatureNodeName.isBlank())   body.add("signatureNodeName",  signatureNodeName);
+        if (signatureNodeNamespace != null && !signatureNodeNamespace.isBlank()) body.add("signatureNodeNamespace", signatureNodeNamespace);
+        if (canonicalizationMethod != null && !canonicalizationMethod.isBlank()) body.add("canonicalizationMethod", canonicalizationMethod);
+        if (signatureNodeId != null && !signatureNodeId.isBlank())       body.add("signatureNodeId",    signatureNodeId);
+        if (isRemoveXPathExclusionFilter != null)        body.add("isRemoveXPathExclusionFilter",        isRemoveXPathExclusionFilter);
+        if (isRemoveNamespacePrefixFromNodeNames != null) body.add("isRemoveNamespacePrefixFromNodeNames", isRemoveNamespacePrefixFromNodeNames);
+        if (isSignKeyInfo != null)                       body.add("isSignKeyInfo",                        isSignKeyInfo);
+        try {
+            ResponseEntity<SignResponse> resp = restTemplate.postForEntity(
+                    signUrl, new HttpEntity<>(body, headers), SignResponse.class);
+            if (resp.getStatusCode() == HttpStatus.OK && resp.getBody() != null) {
+                SignResponse signResp = resp.getBody();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+                    HttpHeaders dh = new HttpHeaders();
+                    dh.set("Authorization", auth);
+                    HttpEntity<Void> de = new HttpEntity<>(dh);
+                    for (int i = 0; i < signResp.documents.size(); i++) {
+                        String dlUrl = signResp.documents.get(i).links.stream()
+                                .filter(l -> "self".equals(l.rel)).findFirst()
+                                .map(l -> l.href).orElse(null);
+                        if (dlUrl == null) continue;
+                        ResponseEntity<byte[]> r = restTemplate.exchange(
+                                dlUrl, HttpMethod.GET, de, byte[].class);
+                        if (r.getStatusCode() == HttpStatus.OK) {
+                            zos.putNextEntry(new ZipEntry("signed_" + files.get(i).getName()));
+                            zos.write(r.getBody());
+                            zos.closeEntry();
+                        }
+                    }
+                }
+                return baos.toByteArray();
+            }
+        } catch (HttpStatusCodeException e) {
+            LOGGER.error("SolidSign API error {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            LOGGER.error("Unexpected error in XAdES PKCS12 form signing: {}", e.getMessage(), e);
+        }
+        return null;
     }
 }
